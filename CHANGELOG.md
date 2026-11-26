@@ -22,6 +22,7 @@ Version 4.3.0-DEV
 - ![FIX][badge-fix] `stride_run`: the original (non-standard) chain names were restored to the wrong residues when STRIDE skipped a residue.
 - ![ENHANCEMENT][badge-enhancement] Calling a function defined in a package extension without loading the package (`PDBTools.test_file` without `LazyArtifacts`) shows which package to load.
 - ![INFO][badge-info] The test files shared with PDBToolsBase (`pdbtools` set) are referenced in the `Artifacts.toml` of PDBTools, such that the tests do not depend on the version of PDBToolsBase. `structure.pdb` now has B-factors in its protein atoms.
+- `sirah_ss`: secondary structure of SIRAH coarse-grained proteins (Darré et al., 2015), in the same format as dssp_run and stride_run.
 
 Version 4.2.0
 ------------- 

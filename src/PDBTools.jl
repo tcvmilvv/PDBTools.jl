@@ -166,6 +166,7 @@ include("./tools/custom_types.jl")
 include("./tools/hammer_aitoff.jl")
 include("./tools/helical_wheel.jl")
 include("./tools/secondary_structure_diagram.jl")
+include("./tools/sirah_ss.jl")
 
 # Hints for functions defined in package extensions
 include("./package_internals/error_hints.jl")
