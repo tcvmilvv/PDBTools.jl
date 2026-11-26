@@ -9,12 +9,6 @@ function _label_color(c)
     return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b < 0.5 ? :white : :black
 end
 
-# Square of side 1 centered at the origin: a rectangle of size `markersize` as a marker
-const _UNIT_SQUARE = Makie.BezierPath([
-    Makie.MoveTo(-0.5, -0.5), Makie.LineTo(0.5, -0.5), Makie.LineTo(0.5, 0.5),
-    Makie.LineTo(-0.5, 0.5), Makie.ClosePath(),
-])
-
 """
     plot(wheel::HelicalWheel; kwargs...)
 
@@ -32,6 +26,10 @@ by its value. Returns a `Makie.Figure`.
 - `show_moment = true`: draw the arrow of the hydrophobic moment.
 - `residue_numbers = :default`: residue numbers shown next to the residues: `:default` (the
   first and last residues), `:all` or `:none`.
+- `label_position = :subscript`: position of the residue numbers, drawn in small circles
+  with the background color of the plot: `:subscript` (lower right of the marker),
+  `:superscript` (upper right of the marker) or `:radial` (along the radial direction;
+  outward on the outer ring and inward on the inner rings).
 - `colorbar = true`, `colorbar_title = ""`, `title = ""`: color bar and title of the plot.
 - `size = (500, 420)`, `font = nothing`, `fontsize = 14`: size of the figure, font
   (default: New Computer Modern, distributed with Makie) and font size.
@@ -70,15 +68,44 @@ function Makie.plot(gp::GridPos, wheel::HelicalWheel;
     return gl
 end
 
+# Offsets (in pixels) of the circles with the residue numbers relative to the centers of
+# the markers of the residues. Each circle is placed along a direction, with its border at
+# `gap` pixels from the border of the marker (radius `marker_radius`); a negative `gap`
+# overlaps them. The direction depends on `label_position`:
+# - :subscript: lower right of the marker (diagonal);
+# - :superscript: upper right of the marker (diagonal);
+# - :radial: along the radial direction, outward on the outer ring and inward on the
+#   inner rings.
+function _badge_offsets(label_position, x, y, radii, ib, diameters;
+    marker_radius = 14.0f0, gap = -5.5f0,
+)
+    outer_radius = maximum(radii)
+    return map(zip(ib, diameters)) do (i, d)
+        u = if label_position == :subscript
+            Vec2f(1, -1) / sqrt(2.0f0)
+        elseif label_position == :superscript
+            Vec2f(1, 1) / sqrt(2.0f0)
+        else # :radial
+            r = hypot(x[i], y[i])
+            v = Vec2f(x[i] / r, y[i] / r)
+            radii[i] == outer_radius ? v : -v
+        end
+        u * (marker_radius + gap + d / 2)
+    end
+end
+
 function Makie.plot!(ax::Axis, wheel::HelicalWheel;
     normalize::Bool = true,
     colormap = :tempo,
     clims = nothing,
     show_moment::Bool = true,
     residue_numbers::Symbol = :default,
+    label_position::Symbol = :subscript,
 )
     residue_numbers in (:default, :all, :none) || throw(ArgumentError(
         "residue_numbers must be :default, :all or :none, got :$residue_numbers"))
+    label_position in (:subscript, :superscript, :radial) || throw(ArgumentError(
+        "label_position must be :subscript, :superscript or :radial, got :$label_position"))
     seq = collect(wheel.sequence)
     n = length(seq)
     μx, μy = wheel.μx, wheel.μy
@@ -131,24 +158,26 @@ function Makie.plot!(ax::Axis, wheel::HelicalWheel;
         arrows2d!(ax, [Point2f(0, 0)], [Vec2f(μx_rot, μy_rot)]; color = :gray30, shaftwidth = 1.5)
     end
 
-    # Residue numbers in small rectangles at the lower right of the markers of the residues
-    # (slightly overlapping them), drawn over the lines of the wheel. The sizes and offsets
-    # are in pixels, as the size of the markers.
+    # Residue numbers in small circles with the background color, next to the markers of
+    # the residues, at the position given by `label_position` (see `_badge_offsets`), drawn
+    # over the lines of the wheel. The sizes and offsets are in pixels, as the size of the
+    # markers.
     if residue_numbers != :none
         ib = residue_numbers == :all ? collect(1:n) : unique([1, n])
         labels = string.(wheel.residue_numbers[ib])
-        # width proportional to the number of digits; the upper left corner of the
-        # rectangle is inside the marker of the residue
+        # width of the number proportional to its number of digits; the diameter of the
+        # circle fits the number
         h = 11.0f0
         widths = [4.6f0 * length(l) + 4 for l in labels]
-        badge_offsets = [Vec2f(6.5 + w / 2, -6.5 - h / 2) for w in widths]
+        diameters = [max(w, h) for w in widths]
+        badge_offsets = _badge_offsets(label_position, x, y, radii, ib, diameters)
         scatter!(ax, x[ib], y[ib];
-            marker = _UNIT_SQUARE, markersize = [Vec2f(w, h) for w in widths],
+            marker = :circle, markersize = diameters,
             marker_offset = badge_offsets,
-            color = :white, strokecolor = :gray30, strokewidth = 0.75,
+            color = ax.backgroundcolor, strokewidth = 0,
         )
         text!(ax, x[ib], y[ib];
-            text = labels, offset = badge_offsets, color = :gray10, align = (:center, :center), fontsize = 8)
+            text = labels, offset = badge_offsets, color = :gray10, align = (:center, :center), fontsize = 7)
     end
 
     lim = maximum(radii) + 0.4
@@ -179,6 +208,11 @@ end
         @test CairoMakie.plot(helical_wheel(seq, rand(n)); residue_numbers) isa CairoMakie.Figure
     end
     @test_throws ArgumentError CairoMakie.plot(helical_wheel(seq, rand(n)); residue_numbers = :first)
+    # positions of the residue numbers, with three rings (54 residues)
+    for label_position in (:subscript, :superscript, :radial)
+        @test CairoMakie.plot(helical_wheel(repeat(seq, 4)[1:54], rand(54)); residue_numbers = :all, label_position) isa CairoMakie.Figure
+    end
+    @test_throws ArgumentError CairoMakie.plot(helical_wheel(seq, rand(n)); label_position = :left)
     # labels are white on dark markers and black on light ones
     label_color = Base.get_extension(PDBTools, :MakiePlotting)._label_color
     gradient = CairoMakie.cgrad(:tempo)

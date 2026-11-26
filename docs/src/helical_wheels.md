@@ -45,6 +45,8 @@ Some details of the drawing:
 - the first and last residues are labeled with their residue numbers (keyword
   `residue_numbers` of `helical_wheel`); use `residue_numbers = :all` (or `:none`) in
   `plot` to label all residues (or none);
+-  the position of the numbers is set with `label_position` (`:subscript`, default,
+  `:superscript` or `:radial`);
 - by default the values are normalized to `[0, 1]` (`normalize = true`). To compare
   several helices on the same color scale, use `normalize = false` and fix the limits
   with `clims`.
